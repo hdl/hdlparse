@@ -45,25 +45,26 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'Hdlparse'
-copyright = u'2017, Kevin Thibedeau'
-author = u'Kevin Thibedeau'
+project = 'Hdlparse'
+copyright = '2017, Kevin Thibedeau'
+author = 'Kevin Thibedeau'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
-#
+
 
 def get_package_version(verfile):
-  '''Scan the script for the version string'''
-  version = None
-  with open(verfile) as fh:
-      try:
-          version = [line.split('=')[1].strip().strip("'") for line in fh if \
-              line.startswith('__version__')][0]
-      except IndexError:
-          pass
-  return version
+    """Scan the script for the version string"""
+    version = None
+    with open(verfile) as fh:
+        try:
+            version = [line.split('=')[1].strip().strip("'") for line in fh if
+                       line.startswith('__version__')][0]
+        except IndexError:
+            pass
+    return version
+
 
 # The short X.Y version.
 version = get_package_version('../hdlparse/minilexer.py')
@@ -102,13 +103,13 @@ html_theme = 'alabaster'
 #
 # html_theme_options = {}
 html_theme_options = {
-  'description': 'HDL parsing library',
-  'show_powered_by': False,
-  'logo_text_align': 'center',
-  'font_family': 'Verdana, Geneva, sans-serif',
-  'github_user': 'kevinpt',
-  'github_repo': 'hdlparse',
-  'github_button': True
+    'description': 'HDL parsing library',
+    'show_powered_by': False,
+    'logo_text_align': 'center',
+    'font_family': 'Verdana, Geneva, sans-serif',
+    'github_user': 'kevinpt',
+    'github_repo': 'hdlparse',
+    'github_button': True
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -124,12 +125,12 @@ html_static_path = ['_static']
 html_sidebars = {
     '**': [
         'about.html',
-        'relations.html', # needs 'show_related': True theme option to display
+        'relations.html',  # needs 'show_related': True theme option to display
         'localtoc.html',
         'projects.html',
         'searchbox.html'
     ],
-    
+
     'index': [
         'about.html',
         'download.html',
@@ -196,6 +197,3 @@ texinfo_documents = [
      author, 'HdlParse', 'One line description of project.',
      'Miscellaneous'),
 ]
-
-
-

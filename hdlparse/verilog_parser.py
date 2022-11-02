@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 # Copyright © 2017 Kevin Thibedeau
 # Distributed under the terms of the MIT license
+"""Verilog documentation parser"""
 import io
 import os
 from collections import OrderedDict
+from .minilexer import MiniLexer
 
-from hdlparse.minilexer import MiniLexer
-
-"""Verilog documentation parser"""
 
 verilog_tokens = {
     # state
@@ -25,7 +24,7 @@ verilog_tokens = {
             r'^[\(\s]*(input|inout|output)\s+(reg|supply0|supply1|tri|triand|trior|tri0|tri1|wire|wand|wor)?'
             r'\s*(signed)?\s*((\[[^]]+\])+)?',
             'module_port_start', 'module_port'),
-        (r'endmodule', 'end_module', '#pop'),
+        (r'\bendmodule\b', 'end_module', '#pop'),
         (r'/\*', 'block_comment', 'block_comment'),
         (r'//#\s*{{(.*)}}\n', 'section_meta'),
         (r'//.*\n', None),
@@ -110,11 +109,12 @@ def parse_verilog_file(fname):
     """Parse a named Verilog file
 
     Args:
-      fname (str): File to parse.
+      fname (str): File to parse
+
     Returns:
-      List of parsed objects.
+      List of parsed objects
     """
-    with open(fname, 'rt') as fh:
+    with open(fname, 'rt', encoding='UTF-8') as fh:
         text = fh.read()
     return parse_verilog(text)
 
@@ -130,25 +130,21 @@ def parse_verilog(text):
     lex = VerilogLexer
 
     name = None
-    kind = None
-    saved_type = None
     mode = 'input'
     port_type = 'wire'
     param_type = ''
 
     metacomments = []
-    parameters = []
 
     generics = []
     ports = OrderedDict()
     sections = []
     port_param_index = 0
     last_item = None
-    array_range_start_pos = 0
 
     objects = []
 
-    for pos, action, groups in lex.run(text):
+    for _, action, groups in lex.run(text):
         if action == 'metacomment':
             comment = groups[0].strip()
             if last_item is None:
@@ -160,7 +156,6 @@ def parse_verilog(text):
             sections.append((port_param_index, groups[0]))
 
         elif action == 'module':
-            kind = 'module'
             name = groups[0]
             generics = []
             ports = OrderedDict()
@@ -226,7 +221,7 @@ def is_verilog(fname):
     Returns:
       True when file has a Verilog extension.
     """
-    return os.path.splitext(fname)[1].lower() in ('.vlog', '.v')
+    return os.path.splitext(fname)[-1].lower() in ('.vlog', '.v', '.sv')
 
 
 class VerilogExtractor:

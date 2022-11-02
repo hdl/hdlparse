@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 # Copyright © 2017 Kevin Thibedeau
 # Distributed under the terms of the MIT license
+"""VHDL documentation parser"""
 import ast
 import io
 import os
 import re
 from pprint import pprint
-from hdlparse.minilexer import MiniLexer
+from typing import Any, Dict, List, Optional, Set
+from .minilexer import MiniLexer
 
-"""VHDL documentation parser"""
 
 vhdl_tokens = {
     'root': [
@@ -172,19 +173,49 @@ class VhdlObject:
         self.desc = desc
 
 
+def remove_outer_parenthesis(s: Optional[str]):
+    if s:
+        n = 1
+        while n:
+            s, n = re.subn(r'\([^()]*\)', '', s.strip())  # remove non-nested/flat balanced parts
+    return s
+
+
+class VhdlParameterType:
+    """Parameter type definition
+
+    Args:
+      name (str): Name of the type
+      direction(str): "to" or "downto"
+      r_bound (str): A simple expression based on digits or variable names
+      l_bound (str): A simple expression based on digits or variable names
+      arange (str): Original array range string
+    """
+
+    def __init__(self, name, direction="", r_bound="", l_bound="", arange=""):
+        self.name = name
+        self.direction = direction.lower().strip()
+        self.r_bound = r_bound
+        self.l_bound = l_bound
+        self.arange = arange
+
+    def __repr__(self):
+        return f"VhdlParameterType('{self.name}','{self.arange}')"
+
+
 class VhdlParameter:
     """Parameter to subprograms, ports, and generics
 
     Args:
       name (str): Name of the object
-      mode (str): Direction mode for the parameter
-      data_type (str): Type name for the parameter
-      default_value (str): Default value of the parameter
-      desc (str): Description from object metacomments
-      param_desc (str): Description of the parameter
+      mode (optional str): Direction mode for the parameter
+      data_type (optional VhdlParameterType): Type name for the parameter
+      default_value (optional str): Default value of the parameter
+      desc (optional str): Description from object metacomments
+      param_desc (optional str): Description of the parameter
     """
 
-    def __init__(self, name, mode=None, data_type=None, default_value=None, desc=None, param_desc=None):
+    def __init__(self, name, mode: Optional[str] = None, data_type: Optional[VhdlParameterType] = None, default_value: Optional[str] = None, desc: Optional[str] = None):
         self.name = name
         self.mode = mode
         self.data_type = data_type
@@ -208,28 +239,6 @@ class VhdlParameter:
 
     def __repr__(self):
         return f"VhdlParameter('{self.name}', '{self.mode}', '{self.data_type.name + self.data_type.arange}')"
-
-
-class VhdlParameterType:
-    """Parameter type definition
-
-    Args:
-      name (str): Name of the type
-      direction(str): "to" or "downto"
-      r_bound (str): A simple expression based on digits or variable names
-      l_bound (str): A simple expression based on digits or variable names
-      arange (str): Original array range string
-    """
-
-    def __init__(self, name, direction="", r_bound="", l_bound="", arange=""):
-        self.name = name
-        self.direction = direction.strip()
-        self.r_bound = r_bound.strip()
-        self.l_bound = l_bound.strip()
-        self.arange = arange
-
-    def __repr__(self):
-        return f"VhdlParameterType('{self.name}','{self.arange}')"
 
 
 class VhdlPackage(VhdlObject):
@@ -349,6 +358,7 @@ class VhdlProcedure(VhdlObject):
 
 class VhdlEntity(VhdlObject):
     """Entity declaration
+
     Args:
       name (str): Name of the entity
       ports (list of VhdlParameter): Port parameters to the entity
@@ -357,20 +367,20 @@ class VhdlEntity(VhdlObject):
       desc (str, optional): Description from object metacomments
     """
 
-    def __init__(self, name, ports, generics=None, sections=None, desc=None):
+    def __init__(self, name: str, ports: List[VhdlParameter], generics: Optional[List[VhdlParameter]] = None, sections: Optional[List[str]] = None, desc: Optional[str] = None):
         VhdlObject.__init__(self, name, desc)
         self.kind = 'entity'
-        self.generics = generics if generics is not None else []
+        self.generics = generics if generics else []
         self.ports = ports
-        self.sections = sections if sections is not None else {}
+        self.sections = sections if sections else {}
 
     def __repr__(self):
         return f"VhdlEntity('{self.name}')"
 
     def dump(self):
         print(f"VHDL entity: {self.name}")
-        for p in self.ports:
-            print(f"\t{p.name} ({type(p.name)}), {p.data_type} ({type(p.data_type)})")
+        for port in self.ports:
+            print(f"\t{port.name} ({type(port.name)}), {port.data_type} ({type(port.data_type)})")
 
 
 class VhdlComponent(VhdlObject):
@@ -398,8 +408,8 @@ class VhdlComponent(VhdlObject):
 
     def dump(self):
         print(f"VHDL component: {self.name}")
-        for p in self.ports:
-            print(f"\t{p.name} ({type(p.name)}), {p.data_type} ({type(p.data_type)})")
+        for port in self.ports:
+            print(f"\t{port.name} ({type(port.name)}), {port.data_type} ({type(port.data_type)})")
 
 
 def parse_vhdl_file(fname):
@@ -410,7 +420,7 @@ def parse_vhdl_file(fname):
     Returns:
       Parsed objects.
     """
-    with open(fname, 'rt') as fh:
+    with open(fname, 'rt', encoding='UTF-8') as fh:
         text = fh.read()
     return parse_vhdl(text)
 
@@ -533,9 +543,9 @@ def parse_vhdl(text):
             ptype = groups[0]
             last_items = []
             for i in param_items:
-                p = VhdlParameter(i, 'in', VhdlParameterType(ptype))
-                generics.append(p)
-                last_items.append(p)
+                param = VhdlParameter(i, 'in', VhdlParameterType(ptype))
+                generics.append(param)
+                last_items.append(param)
 
             param_items = []
 
@@ -552,9 +562,9 @@ def parse_vhdl(text):
 
             last_items = []
             for i in param_items:
-                p = VhdlParameter(i, mode, VhdlParameterType(ptype))
-                ports.append(p)
-                last_items.append(p)
+                param = VhdlParameter(i, mode, VhdlParameterType(ptype))
+                ports.append(param)
+                last_items.append(param)
 
             param_items = []
 
@@ -568,15 +578,38 @@ def parse_vhdl(text):
 
         elif action == 'array_range_val':
             l_bound, direction, r_bound = groups
+            if direction:
+                direction = direction.strip()
+            if l_bound:
+                try:
+                    l_bound = l_bound.replace("/", "//")
+                    l_bound = eval(l_bound)
+                except Exception:
+                    pass
+            if r_bound:
+                try:
+                    r_bound = r_bound.replace("/", "//")
+                    r_bound = eval(r_bound)
+                except Exception:
+                    pass
 
         elif action == 'array_range_end':
-            arange = text[array_range_start_pos:pos[0] + 1]
+            if l_bound and r_bound and direction:
+                arange = " ".join([l_bound, direction, r_bound])
+                print("arange -> ", arange)
+            else:
+                arange = text[array_range_start_pos:pos[0] + 1]
+            # arange = arange.strip().lstrip("(")
+            # match = re.match("\s*\(?\s*(.*)\s+(downto|to)\s+(.*)\s*\)\s*", arange, re.IGNORECASE)
+            # if match:
+            #     print("------", match.groups())
+            #     arange = " ".join(match.groups())
 
             last_items = []
             for i in param_items:
-                p = VhdlParameter(i, mode, VhdlParameterType(ptype, direction, r_bound, l_bound, arange))
-                ports.append(p)
-                last_items.append(p)
+                param = VhdlParameter(i, mode, VhdlParameterType(ptype, direction, r_bound, l_bound, arange))
+                ports.append(param)
+                last_items.append(param)
 
             param_items = []
 
@@ -602,7 +635,7 @@ def parse_vhdl(text):
             saved_type = groups[0]
 
         elif action in (
-        'array_type', 'file_type', 'access_type', 'record_type', 'range_type', 'enum_type', 'incomplete_type'):
+                'array_type', 'file_type', 'access_type', 'record_type', 'range_type', 'enum_type', 'incomplete_type'):
             vobj = VhdlType(saved_type, cur_package, action, metacomments)
             objects.append(vobj)
             kind = None
@@ -659,6 +692,7 @@ def subprogram_signature(vo, fullname=None):
 
     Args:
       vo (VhdlFunction, VhdlProcedure): Subprogram object
+      fullname (None, str): Override object name
     Returns:
       Signature string.
     """
@@ -684,7 +718,7 @@ def is_vhdl(fname):
     Returns:
       True when file has a VHDL extension.
     """
-    return os.path.splitext(fname)[1].lower() in ('.vhdl', '.vhd')
+    return os.path.splitext(fname)[-1].lower() in ('.vhdl', '.vhd')
 
 
 class VhdlExtractor:
@@ -694,12 +728,12 @@ class VhdlExtractor:
       array_types(set): Initial array types
     """
 
-    def __init__(self, array_types=set()):
+    def __init__(self, array_types: Set[str] = None):
         self.array_types = set(('std_ulogic_vector', 'std_logic_vector',
                                 'signed', 'unsigned', 'bit_vector'))
-
-        self.array_types |= array_types
-        self.object_cache = {}
+        if array_types:
+            self.array_types |= array_types
+        self.object_cache: Dict[str, Any] = {}  # Any -> VhdlObject
 
     def extract_objects(self, fname, type_filter=None):
         """Extract objects from a source file
@@ -720,8 +754,15 @@ class VhdlExtractor:
                 self.object_cache[fname] = objects
                 self._register_array_types(objects)
 
+        print("objects=", objects)
+
         if type_filter:
-            objects = [o for o in objects if isinstance(o, type_filter)]
+            if not isinstance(type_filter, list):
+                type_filter = [type_filter]
+
+            def type_is_in_filter(obj):
+                return any(map(lambda clz: isinstance(obj, clz), type_filter))
+            objects = [o for o in objects if type_is_in_filter(o)]
 
         return objects
 
@@ -750,11 +791,7 @@ class VhdlExtractor:
         Returns:
           True if ``data_type`` is a known array type.
         """
-
-        # Split off any brackets
-        data_type = data_type.split('[')[0].strip()
-
-        return data_type.lower() in self.array_types
+        return data_type.name.lower() in self.array_types
 
     def _add_array_types(self, type_defs):
         """Add array data types to internal registry
@@ -772,7 +809,7 @@ class VhdlExtractor:
           fname (str): Name of file to load array database from
         """
         type_defs = ''
-        with open(fname, 'rt') as fh:
+        with open(fname, 'rt', encoding='UTF-8') as fh:
             type_defs = fh.read()
 
         try:
@@ -789,7 +826,7 @@ class VhdlExtractor:
           fname (str): Name of file to save array database to
         """
         type_defs = {'arrays': sorted(list(self.array_types))}
-        with open(fname, 'wt') as fh:
+        with open(fname, 'wt', encoding='UTF-8') as fh:
             pprint(type_defs, stream=fh)
 
     def _register_array_types(self, objects):
@@ -834,10 +871,10 @@ package foo is
   component acomp is
     port (
       a,b,c : in std_ulogic;    -- no default value
-      f,g,h : inout bit := '1'; -- bit ports 
+      f,g,h : inout bit := '1'; -- bit ports
       v : in std_logic_vector(lBound -1 downto 0) -- array range
     ); -- port list comment
-    
+
   end component;
 
 end package;
@@ -850,11 +887,11 @@ end package;
         try:
             for p in o.parameters:
                 print(p)
-        except:
+        except AttributeError:
             pass
 
         try:
             for p in o.ports:
                 print(p)
-        except:
+        except AttributeError:
             pass
