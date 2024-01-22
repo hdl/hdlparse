@@ -645,6 +645,9 @@ def parse_vhdl(text):
             member_name = groups[0]
 
         elif action == 'record_member_type':
+            l_bound = ""
+            r_bound = ""
+            arange = ""
             member_type = groups[0]
             array_range_start_pos = pos[1]
 
