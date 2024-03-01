@@ -48,7 +48,7 @@ vhdl_tokens = {
         (r'array', 'array_type', '#pop'),
         (r'file', 'file_type', '#pop'),
         (r'access', 'access_type', '#pop'),
-        (r'record', 'record_type', '#pop'),
+        (r'record', 'record_type', 'record_type'),
         (r'range', 'range_type', '#pop'),
         (r'\(', 'enum_type', '#pop'),
         (r';', 'incomplete_type', '#pop'),
@@ -139,6 +139,16 @@ vhdl_tokens = {
 
         (r'--#(.*)\n', 'metacomment'),
         (r'/\*', 'block_comment', 'block_comment'),
+    ],
+    'record_type': [
+        (r'\s*end\s+record;', 'end_record', '#pop:2'),
+        (r'\s*(\w+)', 'member_identifier'),
+        (r'\s*:\s*', None, 'record_member_type')
+    ],
+    'record_member_type': [
+        (r'\s*(\w+)\(', 'record_member_type', 'array_range'),
+        (r'\s*(\w+)', 'record_member_type'),
+        (r'\s*;\s*', 'record_member', '#pop')
     ],
     'array_range': [
         (r'\(', 'open_paren', 'nested_parens'),
@@ -263,7 +273,22 @@ class VhdlType(VhdlObject):
 
     def __repr__(self):
         return f"VhdlType('{self.name}', '{self.type_of}')"
+    
+class VhdlRecord(VhdlType):
+    def __init__(self, name, package, type_of, members, desc=None):
+        VhdlType.__init__(self, name, package, type_of, desc)
+        self.members = members
 
+    def __repr__(self):
+        return f"VhdlRecord('{self.name}', '{self.members}', '{self.type_of}')"
+    
+class VhdlRecordMember(VhdlObject):
+    def __init__(self, name, data_type, desc=None):
+        VhdlObject.__init__(self, name, desc)
+        self.data_type = data_type
+
+    def __repr__(self) -> str:
+        return f"\tVhdlRecordMember('{self.name}', '{self.data_type}')"
 
 class VhdlSubtype(VhdlObject):
     """Subtype definition
@@ -442,6 +467,8 @@ def parse_vhdl(text):
     last_items = []
     array_range_start_pos = 0
 
+    record_members = []
+
     objects = []
 
     for pos, action, groups in lex.run(text):
@@ -574,9 +601,11 @@ def parse_vhdl(text):
 
             last_items = []
             for i in param_items:
+                arange = text[array_range_start_pos:pos[0] + 1]
                 p = VhdlParameter(i, mode, VhdlParameterType(ptype, direction, r_bound, l_bound, arange))
                 ports.append(p)
                 last_items.append(p)
+                arange=""
 
             param_items = []
 
@@ -602,12 +631,43 @@ def parse_vhdl(text):
             saved_type = groups[0]
 
         elif action in (
-        'array_type', 'file_type', 'access_type', 'record_type', 'range_type', 'enum_type', 'incomplete_type'):
+        'array_type', 'file_type', 'access_type', 'range_type', 'enum_type', 'incomplete_type'):
             vobj = VhdlType(saved_type, cur_package, action, metacomments)
             objects.append(vobj)
             kind = None
             name = None
             metacomments = []
+
+        elif action == 'record_type':
+            name = saved_type
+
+        elif action == 'member_identifier':
+            member_name = groups[0]
+
+        elif action == 'record_member_type':
+            l_bound = ""
+            r_bound = ""
+            arange = ""
+            member_type = groups[0]
+            array_range_start_pos = pos[1]
+
+        elif action == 'record_member':
+            record_members.append(VhdlRecordMember(member_name, 
+                                VhdlParameterType(member_type, "",l_bound=l_bound,r_bound=r_bound,arange=arange), metacomments))
+            metacomments = []
+            arange=""
+            member_type = None
+            member_name = None
+            l_bound=""
+            r_bound=""
+
+        elif action == 'end_record':
+            vobj = VhdlRecord(name, cur_package, 'record', record_members, metacomments)
+            objects.append(vobj)
+            kind = None
+            name = None
+            metacomments = []
+            record_members = []
 
         elif action == 'subtype':
             vobj = VhdlSubtype(groups[0], cur_package, groups[1], metacomments)
